@@ -1,12 +1,12 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\Somnx\\OneDrive\\Desktop\\thirdweb-contracts\\Deploy\\coinflip\\flipcoin\\contracts\\flipcoin.sol": {
-      "lastModificationDate": 1701040395599,
-      "contentHash": "ae74acce62aab5b100ab7041b67cfa90",
-      "sourceName": "contracts/flipcoin.sol",
+    "C:\\Users\\Somnx\\OneDrive\\Desktop\\thirdweb-contracts\\Contracts\\Base-Crowdfunding\\contracts\\BaseCrowdFunding.sol": {
+      "lastModificationDate": 1702094829720,
+      "contentHash": "90060c163fe2fc801402f25f461a0994",
+      "sourceName": "contracts/BaseCrowdFunding.sol",
       "solcConfig": {
-        "version": "0.8.17",
+        "version": "0.8.9",
         "settings": {
           "optimizer": {
             "enabled": true,
@@ -30,15 +30,13 @@
       },
       "imports": [],
       "versionPragmas": [
-        "^0.8.17",
-        "^0.8.0",
-        "^0.8.0"
+        "^0.8.9"
       ],
       "artifacts": [
-        "BaseContract",
-        "BullFlip",
-        "IERC20",
-        "ReentrancyGuard"
+        "BaseCrowdFunding",
+        "ERC1155",
+        "ERC721",
+        "IERC20"
       ]
     }
   }
