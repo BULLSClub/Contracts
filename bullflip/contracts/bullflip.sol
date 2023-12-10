@@ -193,6 +193,11 @@ contract BullFlip is BaseContract, ReentrancyGuard {
         houseFeePercentage = newFee;
     }
 
+    function setBetAmountsForToken(SupportedToken token, uint256[] memory amounts) external onlyOwner {
+        require(isTokenSupported(token), "Token not supported");
+        validBetAmounts[0xC1B6844D5134c8E550043f01FFbF49CA66Efc77F][token] = amounts;
+    }
+
     function placeBet(SupportedToken token, uint256 amount, BetOption betOption) external whenNotPaused nonReentrant {
         require(isTokenSupported(token), "Token not supported");
         require(_isValidBetAmount(token, amount), "Invalid bet amount");
@@ -272,12 +277,6 @@ contract BullFlip is BaseContract, ReentrancyGuard {
         return false;
     }
 
-    function setValidBetAmounts(SupportedToken token, uint256[] memory amounts) external onlyOwner {
-        require(isTokenSupported(token), "Token not supported");
-        validBetAmounts[0xC1B6844D5134c8E550043f01FFbF49CA66Efc77F][token] = amounts;
-    }
-
-    // Function to check if a given amount is a valid bet amount for a specific token
     function _isValidBetAmount(SupportedToken token, uint256 amount) internal view returns (bool) {
         uint256[] memory validAmounts = validBetAmounts[0xC1B6844D5134c8E550043f01FFbF49CA66Efc77F][token];
         for (uint256 i = 0; i < validAmounts.length; i++) {
