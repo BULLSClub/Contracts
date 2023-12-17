@@ -135,167 +135,47 @@ contract BaseContract {
     }
 }
 
-contract BullFlip is BaseContract, ReentrancyGuard {
-    enum BetOption { BULLS, BEARS }
-    enum SupportedToken { MY_TOKEN }
 
-    struct Bet {
-        address payable bettor;
-        uint256 amount;
-        BetOption betOption;
-    }
 
-    address public owner;
-    uint256 public houseFeePercentage = 3;
-    SupportedToken[] public supportedTokens;
-    mapping(address => mapping(SupportedToken => uint256[])) public validBetAmounts;
-    mapping(address => uint256) public balances;
-    Bet[] public bets;
 
-    event BetPlaced(address indexed bettor, uint256 amount, BetOption betOption);
-    event BetResolved(address indexed bettor, uint256 amount, BetOption betOption, bool won);
-    event HouseFeeApplied(address indexed bettor, uint256 amount);
 
-    bool public isPaused;
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only the owner can call this function");
+import "./SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract ERC20MultiSender is Ownable {
+    using SafeMath for uint256;
+
+    event Multisended(uint256 total, address tokenAddress);
+
+    uint256 public fee; // Fee in wei
+
+    modifier hasFee() {
+        require(msg.value >= fee, "Insufficient fee");
         _;
     }
 
-    modifier whenNotPaused() {
-        require(!isPaused, "Contract is paused");
-        _;
+    function setFee(uint256 _fee) external onlyOwner {
+        fee = _fee;
     }
 
-    constructor() {
-        owner = msg.sender;
-        supportedTokens.push(SupportedToken.MY_TOKEN);
-        validBetAmounts[0xC1B6844D5134c8E550043f01FFbF49CA66Efc77F][SupportedToken.MY_TOKEN] = [1, 5, 10, 25, 100, 500, 1000, 10000, 25000]; // Default bet amounts for MY_TOKEN
-    }
+    function multisendToken(
+        address token,
+        address[] memory _recipients,
+        uint256[] memory _amounts
+    ) external payable hasFee {
+        require(_recipients.length == _amounts.length, "Mismatched arrays");
 
-    function addSupportedToken(SupportedToken token) external onlyOwner {
-        require(!isTokenSupported(token), "Token already supported");
-        supportedTokens.push(token);
-        if (token == SupportedToken.MY_TOKEN) {
-            validBetAmounts[0xC1B6844D5134c8E550043f01FFbF49CA66Efc77F][SupportedToken.MY_TOKEN] = [1, 5, 10, 25, 100, 500, 1000, 10000, 25000]; // Set default bet amounts
-        }
-    }
+        IERC20 erc20Token = IERC20(token);
 
-    function fundContract(SupportedToken token, uint256 amount) external onlyOwner {
-        require(isTokenSupported(token), "Token not supported");
-        IERC20(_getTokenAddress(token)).transferFrom(msg.sender, address(this), amount);
-        balances[_getTokenAddress(token)] += amount;
-    }
+        uint256 totalAmount = 0;
 
-    function setHouseFee(uint256 newFee) external onlyOwner {
-        require(newFee <= 100, "Fee percentage must be 100 or less");
-        houseFeePercentage = newFee;
-    }
-
-    function setBetAmountsForToken(SupportedToken token, uint256[] memory amounts) external onlyOwner {
-        require(isTokenSupported(token), "Token not supported");
-        validBetAmounts[0xC1B6844D5134c8E550043f01FFbF49CA66Efc77F][token] = amounts;
-    }
-
-    function placeBet(SupportedToken token, uint256 amount, BetOption betOption) external whenNotPaused nonReentrant {
-        require(isTokenSupported(token), "Token not supported");
-        require(_isValidBetAmount(token, amount), "Invalid bet amount");
-        require(balances[_getTokenAddress(token)] >= amount, "Insufficient balance");
-
-        uint256 houseCut = (amount * houseFeePercentage) / 100;
-        uint256 betValue = amount - houseCut;
-
-        IERC20(_getTokenAddress(token)).transferFrom(msg.sender, address(this), amount);
-        balances[_getTokenAddress(token)] += betValue;
-
-        Bet memory newBet = Bet({
-            bettor: payable(msg.sender),
-            amount: betValue,
-            betOption: betOption
-        });
-
-        bets.push(newBet);
-
-        emit BetPlaced(msg.sender, betValue, betOption);
-        emit HouseFeeApplied(msg.sender, houseCut);
-    }
-
-    function resolveBet(uint256 betIndex) external whenNotPaused nonReentrant {
-        require(betIndex < bets.length, "Invalid bet index");
-        Bet storage bet = bets[betIndex];
-        require(msg.sender == bet.bettor, "You are not the bettor");
-
-        BetOption flipResult = BetOption(_getRandomResult() % 2);
-
-        bool won = bet.betOption == flipResult;
-        if (won) {
-            uint256 payout = bet.amount * 2;
-            IERC20(_getTokenAddress(SupportedToken.MY_TOKEN)).transfer(bet.bettor, payout);
-            balances[_getTokenAddress(SupportedToken.MY_TOKEN)] -= payout;
-        } else {
-            balances[_getTokenAddress(SupportedToken.MY_TOKEN)] += bet.amount;
+        for (uint256 i = 0; i < _recipients.length; i++) {
+            erc20Token.transferFrom(msg.sender, _recipients[i], _amounts[i]);
+            totalAmount = totalAmount.add(_amounts[i]);
         }
 
-        emit BetResolved(bet.bettor, bet.amount, bet.betOption, won);
-
-        // Delete the bet by swapping with the last bet and then pop the last bet
-        uint256 lastIndex = bets.length - 1;
-        if (betIndex != lastIndex) {
-            bets[betIndex] = bets[lastIndex];
-        }
-        bets.pop();
-    }
-
-    function withdrawTokens(SupportedToken token, uint256 amount) external onlyOwner {
-        require(isTokenSupported(token), "Token not supported");
-        require(amount <= balances[_getTokenAddress(token)], "Insufficient balance");
-
-        IERC20(_getTokenAddress(token)).transfer(owner, amount);
-        balances[_getTokenAddress(token)] -= amount;
-    }
-
-    function getRandomResult() external view whenNotPaused returns (uint256) {
-        // Use blockhash of the previous block as a simple randomness source
-        return _getRandomResult();
-    }
-
-    function pauseContract() external onlyOwner {
-        isPaused = true;
-    }
-
-    function unpauseContract() external onlyOwner {
-        isPaused = false;
-    }
-
-    function isTokenSupported(SupportedToken token) public view returns (bool) {
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            if (supportedTokens[i] == token) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function _isValidBetAmount(SupportedToken token, uint256 amount) internal view returns (bool) {
-        uint256[] memory validAmounts = validBetAmounts[0xC1B6844D5134c8E550043f01FFbF49CA66Efc77F][token];
-        for (uint256 i = 0; i < validAmounts.length; i++) {
-            if (amount == validAmounts[i]) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function _getTokenAddress(SupportedToken token) internal pure returns (address) {
-        if (token == SupportedToken.MY_TOKEN) {
-            return 0xC1B6844D5134c8E550043f01FFbF49CA66Efc77F;
-        }
-        revert("Unsupported token");
-    }
-
-    function _getRandomResult() internal view returns (uint256) {
-        // Use blockhash of the previous block as a simple randomness source
-        return uint256(blockhash(block.number - 1));
+        emit Multisended(totalAmount, token);
     }
 }
